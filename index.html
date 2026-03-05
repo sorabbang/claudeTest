@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tetris VS AI</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e27;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    color: #c8d6f0;
+    overflow: hidden;
+    touch-action: none;
+  }
+  canvas { border: 2px solid #1e3a6e; border-radius: 4px; }
+  .game-container { display: flex; gap: 16px; align-items: flex-start; }
+  .player-section { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .player-label { font-size: 14px; font-weight: bold; color: #4d9bf7; text-transform: uppercase; letter-spacing: 2px; }
+  .ai-label { color: #e94560; }
+  .board-area { display: flex; gap: 8px; align-items: flex-start; }
+  .side-panel { display: flex; flex-direction: column; gap: 8px; min-width: 90px; }
+  .panel-box {
+    background: #0f1b3d;
+    border: 1px solid #1e3a6e;
+    border-radius: 4px;
+    padding: 6px;
+    text-align: center;
+  }
+  .panel-box h3 { font-size: 10px; margin-bottom: 4px; color: #5b82c4; text-transform: uppercase; letter-spacing: 1px; }
+  .panel-box .value { font-size: 16px; font-weight: bold; color: #4d9bf7; }
+  .center-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 60px;
+    padding-top: 40px;
+  }
+  .attack-indicator {
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .attack-left { color: #e94560; }
+  .attack-right { color: #4d9bf7; }
+  .vs-text { font-size: 28px; font-weight: bold; color: #fff; text-shadow: 0 0 20px rgba(77,155,247,0.5); }
+
+  /* Overlay */
+  .overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(5,10,30,0.92);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+    font-weight: bold;
+    color: #4d9bf7;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h1 { font-size: 36px; letter-spacing: 4px; }
+  .overlay h2 { font-size: 20px; color: #c8d6f0; }
+  .level-buttons { display: flex; gap: 12px; margin-top: 8px; }
+  .level-btn {
+    padding: 14px 28px;
+    font-size: 15px;
+    border: 2px solid #1e3a6e;
+    border-radius: 8px;
+    background: #0f1b3d;
+    color: #c8d6f0;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+  }
+  .level-btn:hover { background: #1e3a6e; color: #fff; transform: scale(1.05); }
+  .level-btn.easy { border-color: #2ed573; }
+  .level-btn.easy:hover { background: #2ed573; color: #0a0e27; }
+  .level-btn.normal { border-color: #ffa502; }
+  .level-btn.normal:hover { background: #ffa502; color: #0a0e27; }
+  .level-btn.hard { border-color: #e94560; }
+  .level-btn.hard:hover { background: #e94560; color: #fff; }
+  .result-text { font-size: 32px; }
+  .win { color: #2ed573; }
+  .lose { color: #e94560; }
+  .restart-btn {
+    padding: 12px 32px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    background: #1e5bbf;
+    color: #fff;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .restart-btn:hover { background: #2b6fd6; }
+
+  /* Mobile */
+  .mobile-controls {
+    display: none;
+    width: 100%;
+    max-width: 400px;
+    margin-top: 8px;
+    gap: 6px;
+  }
+  .mobile-controls .row { display: flex; justify-content: center; gap: 6px; }
+  .mobile-controls button {
+    width: 58px; height: 48px;
+    font-size: 20px;
+    border: none;
+    border-radius: 8px;
+    background: #1a2f5e;
+    color: #6ea8f7;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .mobile-controls button:active { background: #2b4a8a; }
+  .mobile-controls .wide { width: 80px; font-size: 11px; font-weight: bold; }
+
+  @media (max-width: 700px) {
+    .game-container { transform: scale(0.65); transform-origin: top center; }
+    .mobile-controls { display: flex; flex-direction: column; align-items: center; }
+  }
+  @media (max-width: 500px) {
+    .game-container { transform: scale(0.5); transform-origin: top center; }
+  }
+</style>
+</head>
+<body>
+<div id="menu-overlay" class="overlay">
+  <h1>TETRIS VS AI</h1>
+  <h2>Select AI Level</h2>
+  <div class="level-buttons">
+    <button class="level-btn easy" onclick="startGame(1)">EASY</button>
+    <button class="level-btn normal" onclick="startGame(2)">NORMAL</button>
+    <button class="level-btn hard" onclick="startGame(3)">HARD</button>
+  </div>
+</div>
+
+<div id="result-overlay" class="overlay hidden">
+  <div id="result-text" class="result-text"></div>
+  <button class="restart-btn" onclick="showMenu()">MENU</button>
+</div>
+
+<div style="display:flex;flex-direction:column;align-items:center;">
+  <div class="game-container">
+    <!-- Player -->
+    <div class="player-section">
+      <div class="player-label">YOU</div>
+      <div class="board-area">
+        <div class="side-panel">
+          <div class="panel-box"><h3>Hold(Z)</h3><canvas id="p-hold" width="80" height="80"></canvas></div>
+          <div class="panel-box"><h3>Score</h3><div class="value" id="p-score">0</div></div>
+          <div class="panel-box"><h3>Lines</h3><div class="value" id="p-lines">0</div></div>
+        </div>
+        <canvas id="p-board"></canvas>
+        <div class="side-panel">
+          <div class="panel-box"><h3>Next</h3><canvas id="p-next" width="80" height="80"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center -->
+    <div class="center-panel">
+      <div class="vs-text">VS</div>
+      <div id="attack-left" class="attack-indicator attack-left"></div>
+      <div id="attack-right" class="attack-indicator attack-right"></div>
+    </div>
+
+    <!-- AI -->
+    <div class="player-section">
+      <div class="player-label ai-label">AI</div>
+      <div class="board-area">
+        <div class="side-panel">
+          <div class="panel-box"><h3>Hold</h3><canvas id="a-hold" width="80" height="80"></canvas></div>
+          <div class="panel-box"><h3>Score</h3><div class="value" id="a-score">0</div></div>
+          <div class="panel-box"><h3>Lines</h3><div class="value" id="a-lines">0</div></div>
+        </div>
+        <canvas id="a-board"></canvas>
+        <div class="side-panel">
+          <div class="panel-box"><h3>Next</h3><canvas id="a-next" width="80" height="80"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mobile-controls" id="mobile-controls">
+    <div class="row"><button id="btn-rotate">&#8593;</button></div>
+    <div class="row">
+      <button id="btn-left">&#8592;</button>
+      <button id="btn-down">&#8595;</button>
+      <button id="btn-right">&#8594;</button>
+    </div>
+    <div class="row">
+      <button id="btn-hold" class="wide">HOLD</button>
+      <button id="btn-drop" class="wide">DROP</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLS = 10, ROWS = 20, BLOCK = 24;
+const RANDOM_COLORS = [
+  '#ff4757','#ff6b81','#1e90ff','#70a1ff','#2ed573','#7bed9f','#ffa502','#eccc68',
+  '#a55eea','#cf6ee4','#ff6348','#00d2d3','#1abc9c','#f368e0','#48dbfb','#ff9ff3',
+  '#54a0ff','#5f27cd','#01a3a4','#c44569',
+];
+function randomColor() { return RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)]; }
+
+const SHAPES = [
+  [],
+  [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  [[1,0,0],[1,1,1],[0,0,0]],
+  [[0,0,1],[1,1,1],[0,0,0]],
+  [[1,1],[1,1]],
+  [[0,1,1],[1,1,0],[0,0,0]],
+  [[0,1,0],[1,1,1],[0,0,0]],
+  [[1,1,0],[0,1,1],[0,0,0]],
+  [[1]], // bomb
+];
+const BOMB_TYPE = 8, BOMB_CHANCE = 0.10, BOMB_RADIUS = 3;
+
+// ========== Game State ==========
+function createState(boardId, nextId, holdId, scoreId, linesId) {
+  const cv = document.getElementById(boardId);
+  cv.width = COLS * BLOCK; cv.height = ROWS * BLOCK;
+  return {
+    canvas: cv, ctx: cv.getContext('2d'),
+    nextCv: document.getElementById(nextId), nextCtx: document.getElementById(nextId).getContext('2d'),
+    holdCv: document.getElementById(holdId), holdCtx: document.getElementById(holdId).getContext('2d'),
+    scoreEl: document.getElementById(scoreId), linesEl: document.getElementById(linesId),
+    board: Array.from({ length: ROWS }, () => new Array(COLS).fill(0)),
+    piece: null, nextPiece: null, holdPiece: null, canHold: true,
+    score: 0, lines: 0, level: 1,
+    dropInterval: 1000, dropTimer: 0,
+    dead: false,
+    explosionCells: [], explosionTimer: 0,
+    pendingGarbage: 0,
+  };
+}
+
+let player, ai, aiLevel, gameRunning, animId, lastTime;
+let aiMoveTimer, aiDropTimer, aiTarget;
+
+function randomType() {
+  if (Math.random() < BOMB_CHANCE) return BOMB_TYPE;
+  return Math.floor(Math.random() * 7) + 1;
+}
+
+function createPiece(type) {
+  const shape = SHAPES[type].map(r => [...r]);
+  const isBomb = type === BOMB_TYPE;
+  return { type, shape, color: isBomb ? '#ff2222' : randomColor(), isBomb, x: Math.floor((COLS - shape[0].length) / 2), y: 0 };
+}
+
+function rotate(shape) {
+  const n = shape.length, m = shape[0].length;
+  const rot = Array.from({ length: m }, () => new Array(n).fill(0));
+  for (let r = 0; r < n; r++) for (let c = 0; c < m; c++) rot[c][n - 1 - r] = shape[r][c];
+  return rot;
+}
+
+function collides(brd, pc, dx = 0, dy = 0, shape = pc.shape) {
+  for (let r = 0; r < shape.length; r++)
+    for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      const nx = pc.x + c + dx, ny = pc.y + r + dy;
+      if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+      if (ny >= 0 && brd[ny][nx]) return true;
+    }
+  return false;
+}
+
+function lockPiece(st) {
+  const bombPos = [];
+  for (let r = 0; r < st.piece.shape.length; r++)
+    for (let c = 0; c < st.piece.shape[r].length; c++) {
+      if (!st.piece.shape[r][c]) continue;
+      const y = st.piece.y + r;
+      if (y < 0) { st.dead = true; return 0; }
+      st.board[y][st.piece.x + c] = st.piece.isBomb ? 'BOMB' : st.piece.color;
+      if (st.piece.isBomb) bombPos.push({ r: y, c: st.piece.x + c });
+    }
+  if (bombPos.length > 0) explode(st, bombPos);
+  const cleared = clearLines(st);
+
+  // receive pending garbage
+  if (st.pendingGarbage > 0) {
+    addGarbage(st, st.pendingGarbage);
+    st.pendingGarbage = 0;
+  }
+
+  st.piece = createPiece(st.nextPiece.type);
+  st.nextPiece = createPiece(randomType());
+  st.canHold = true;
+  if (collides(st.board, st.piece)) st.dead = true;
+  return cleared;
+}
+
+function explode(st, positions) {
+  const half = Math.floor(BOMB_RADIUS / 2);
+  const cells = [];
+  for (const pos of positions)
+    for (let dr = -half; dr <= half; dr++)
+      for (let dc = -half; dc <= half; dc++) {
+        const nr = pos.r + dr, nc = pos.c + dc;
+        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+          st.board[nr][nc] = 0;
+          cells.push({ r: nr, c: nc });
+        }
+      }
+  st.explosionCells = cells;
+  st.explosionTimer = 20;
+  st.score += cells.length * 10;
+  st.scoreEl.textContent = st.score;
+  applyGravity(st);
+}
+
+function applyGravity(st) {
+  for (let c = 0; c < COLS; c++) {
+    let wr = ROWS - 1;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (st.board[r][c] !== 0) {
+        st.board[wr][c] = st.board[r][c];
+        if (wr !== r) st.board[r][c] = 0;
+        wr--;
+      }
+    }
+    for (let r = wr; r >= 0; r--) st.board[r][c] = 0;
+  }
+}
+
+function clearLines(st) {
+  let cleared = 0;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (st.board[r].every(v => v !== 0)) {
+      st.board.splice(r, 1);
+      st.board.unshift(new Array(COLS).fill(0));
+      cleared++; r++;
+    }
+  }
+  if (cleared) {
+    st.score += [0, 100, 300, 500, 800][cleared] * st.level;
+    st.lines += cleared;
+    st.level = Math.floor(st.lines / 10) + 1;
+    st.dropInterval = Math.max(50, 1000 - (st.level - 1) * 80);
+    st.scoreEl.textContent = st.score;
+    st.linesEl.textContent = st.lines;
+  }
+  return cleared;
+}
+
+function addGarbage(st, count) {
+  for (let i = 0; i < count; i++) {
+    st.board.shift();
+    const row = new Array(COLS).fill('#555555');
+    const gap = Math.floor(Math.random() * COLS);
+    row[gap] = 0;
+    st.board.push(row);
+  }
+}
+
+function sendAttack(fromSt, toSt, cleared) {
+  if (cleared >= 3) {
+    const garbage = cleared - 2; // 3줄=1, 4줄=2
+    toSt.pendingGarbage += garbage;
+    showAttackIndicator(fromSt === player ? 'right' : 'left', garbage);
+  }
+}
+
+function showAttackIndicator(dir, count) {
+  const el = document.getElementById(dir === 'left' ? 'attack-left' : 'attack-right');
+  const arrow = dir === 'left' ? '<<<' : '>>>';
+  el.textContent = `${arrow} +${count}`;
+  el.style.opacity = '1';
+  setTimeout(() => el.style.opacity = '0', 1200);
+}
+
+function holdPiece(st) {
+  if (!st.canHold) return;
+  st.canHold = false;
+  if (st.holdPiece) {
+    const tmp = st.holdPiece;
+    st.holdPiece = { type: st.piece.type, isBomb: st.piece.isBomb, color: st.piece.color };
+    st.piece = createPiece(tmp.type);
+    st.piece.color = tmp.color;
+    st.piece.isBomb = tmp.isBomb;
+  } else {
+    st.holdPiece = { type: st.piece.type, isBomb: st.piece.isBomb, color: st.piece.color };
+    st.piece = createPiece(st.nextPiece.type);
+    st.nextPiece = createPiece(randomType());
+  }
+}
+
+function dropPiece(st) {
+  if (!collides(st.board, st.piece, 0, 1)) {
+    st.piece.y++;
+    return 0;
+  } else {
+    return lockPiece(st);
+  }
+}
+
+function hardDrop(st) {
+  while (!collides(st.board, st.piece, 0, 1)) { st.piece.y++; st.score += 2; }
+  st.scoreEl.textContent = st.score;
+  return dropPiece(st);
+}
+
+function tryRotate(st) {
+  const rotated = rotate(st.piece.shape);
+  for (const kick of [0, -1, 1, -2, 2]) {
+    if (!collides(st.board, st.piece, kick, 0, rotated)) {
+      st.piece.shape = rotated;
+      st.piece.x += kick;
+      return;
+    }
+  }
+}
+
+// ========== Drawing ==========
+function drawBlock(cx, x, y, color, sz) {
+  cx.fillStyle = color;
+  cx.fillRect(x * sz, y * sz, sz, sz);
+  cx.strokeStyle = 'rgba(0,0,0,0.35)';
+  cx.lineWidth = 1;
+  cx.strokeRect(x * sz, y * sz, sz, sz);
+  cx.fillStyle = 'rgba(255,255,255,0.15)';
+  cx.fillRect(x * sz + 1, y * sz + 1, sz - 2, sz / 4);
+}
+
+function drawBomb(cx, x, y, sz) {
+  const px = x * sz, py = y * sz;
+  cx.fillStyle = '#1a1a1a';
+  cx.fillRect(px, py, sz, sz);
+  cx.strokeStyle = '#ff4444'; cx.lineWidth = 2;
+  cx.strokeRect(px + 1, py + 1, sz - 2, sz - 2);
+  const cx2 = px + sz/2, cy2 = py + sz/2, r = sz * 0.28;
+  cx.beginPath(); cx.arc(cx2, cy2, r, 0, Math.PI*2);
+  cx.fillStyle = '#333'; cx.fill();
+  cx.strokeStyle = '#ff6600'; cx.lineWidth = 1.5; cx.stroke();
+  cx.beginPath(); cx.arc(cx2 + 1, cy2 - r - 2, 2.5, 0, Math.PI*2);
+  cx.fillStyle = '#ffdd00'; cx.fill();
+}
+
+function drawPreview(cx, cv, pc) {
+  cx.fillStyle = '#0f1b3d';
+  cx.fillRect(0, 0, cv.width, cv.height);
+  if (!pc) return;
+  const s = SHAPES[pc.type], bk = 18;
+  const ox = Math.floor((cv.width - s[0].length * bk) / 2);
+  const oy = Math.floor((cv.height - s.length * bk) / 2);
+  for (let r = 0; r < s.length; r++)
+    for (let c = 0; c < s[r].length; c++)
+      if (s[r][c]) {
+        if (pc.isBomb) {
+          const bx = ox + c * bk, by = oy + r * bk;
+          cx.fillStyle = '#1a1a1a'; cx.fillRect(bx, by, bk, bk);
+          cx.strokeStyle = '#ff4444'; cx.lineWidth = 1.5; cx.strokeRect(bx+1, by+1, bk-2, bk-2);
+          cx.beginPath(); cx.arc(bx+bk/2, by+bk/2, bk*0.28, 0, Math.PI*2);
+          cx.fillStyle = '#333'; cx.fill();
+        } else {
+          cx.fillStyle = pc.color;
+          cx.fillRect(ox + c * bk, oy + r * bk, bk, bk);
+          cx.strokeStyle = 'rgba(0,0,0,0.3)';
+          cx.strokeRect(ox + c * bk, oy + r * bk, bk, bk);
+        }
+      }
+}
+
+function drawHold(st) {
+  st.holdCtx.fillStyle = '#0f1b3d';
+  st.holdCtx.fillRect(0, 0, st.holdCv.width, st.holdCv.height);
+  if (!st.holdPiece) return;
+  if (!st.canHold) st.holdCtx.globalAlpha = 0.35;
+  drawPreview(st.holdCtx, st.holdCv, st.holdPiece);
+  st.holdCtx.globalAlpha = 1;
+}
+
+function drawState(st) {
+  const { ctx: cx, canvas: cv } = st;
+  cx.fillStyle = '#070d1f';
+  cx.fillRect(0, 0, cv.width, cv.height);
+
+  cx.strokeStyle = 'rgba(100,150,255,0.04)';
+  cx.lineWidth = 1;
+  for (let r = 0; r <= ROWS; r++) { cx.beginPath(); cx.moveTo(0, r*BLOCK); cx.lineTo(cv.width, r*BLOCK); cx.stroke(); }
+  for (let c = 0; c <= COLS; c++) { cx.beginPath(); cx.moveTo(c*BLOCK, 0); cx.lineTo(c*BLOCK, cv.height); cx.stroke(); }
+
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      if (!st.board[r][c]) continue;
+      if (st.board[r][c] === 'BOMB') drawBomb(cx, c, r, BLOCK);
+      else drawBlock(cx, c, r, st.board[r][c], BLOCK);
+    }
+
+  if (st.piece && !st.dead) {
+    let gy = 0;
+    while (!collides(st.board, st.piece, 0, gy + 1)) gy++;
+    cx.globalAlpha = 0.2;
+    for (let r = 0; r < st.piece.shape.length; r++)
+      for (let c = 0; c < st.piece.shape[r].length; c++)
+        if (st.piece.shape[r][c]) {
+          if (st.piece.isBomb) drawBomb(cx, st.piece.x+c, st.piece.y+r+gy, BLOCK);
+          else drawBlock(cx, st.piece.x+c, st.piece.y+r+gy, st.piece.color, BLOCK);
+        }
+    cx.globalAlpha = 1;
+
+    for (let r = 0; r < st.piece.shape.length; r++)
+      for (let c = 0; c < st.piece.shape[r].length; c++)
+        if (st.piece.shape[r][c]) {
+          if (st.piece.isBomb) drawBomb(cx, st.piece.x+c, st.piece.y+r, BLOCK);
+          else drawBlock(cx, st.piece.x+c, st.piece.y+r, st.piece.color, BLOCK);
+        }
+  }
+
+  drawPreview(st.nextCtx, st.nextCv, st.nextPiece);
+  drawHold(st);
+
+  if (st.explosionTimer > 0) {
+    const alpha = st.explosionTimer / 20;
+    for (const cell of st.explosionCells) {
+      const px = cell.c * BLOCK, py = cell.r * BLOCK;
+      cx.fillStyle = `rgba(255,${Math.floor(100+155*alpha)},0,${alpha*0.7})`;
+      cx.fillRect(px, py, BLOCK, BLOCK);
+    }
+    st.explosionTimer--;
+  }
+
+  // dead overlay
+  if (st.dead) {
+    cx.fillStyle = 'rgba(0,0,0,0.6)';
+    cx.fillRect(0, 0, cv.width, cv.height);
+    cx.fillStyle = '#e94560'; cx.font = 'bold 20px sans-serif'; cx.textAlign = 'center';
+    cx.fillText('K.O.', cv.width/2, cv.height/2);
+  }
+}
+
+// ========== AI ==========
+function evaluateBoard(board) {
+  let totalHeight = 0, holes = 0, bumpiness = 0, completedLines = 0;
+  const heights = new Array(COLS).fill(0);
+
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (board[r][c]) { heights[c] = ROWS - r; break; }
+    }
+  }
+
+  for (let c = 0; c < COLS; c++) {
+    totalHeight += heights[c];
+    let blockFound = false;
+    for (let r = 0; r < ROWS; r++) {
+      if (board[r][c]) blockFound = true;
+      else if (blockFound) holes++;
+    }
+  }
+
+  for (let c = 0; c < COLS - 1; c++) bumpiness += Math.abs(heights[c] - heights[c + 1]);
+  for (let r = 0; r < ROWS; r++) if (board[r].every(v => v !== 0)) completedLines++;
+
+  return completedLines;
+}
+
+function cloneBoard(board) { return board.map(r => [...r]); }
+
+function findBestMove(st) {
+  const piece = st.piece;
+  let bestScore = -Infinity, bestX = piece.x, bestRot = 0;
+
+  // weights by difficulty
+  const w = aiLevel === 1 ? { h: -0.2, holes: -0.5, bump: -0.1, lines: 1.0, rand: 3.0 }
+          : aiLevel === 2 ? { h: -0.5, holes: -2.0, bump: -0.3, lines: 3.0, rand: 0.8 }
+          :                  { h: -0.51, holes: -3.5, bump: -0.18, lines: 5.0, rand: 0.0 };
+
+  let shape = piece.shape;
+  for (let rot = 0; rot < 4; rot++) {
+    if (rot > 0) shape = rotate(shape);
+    for (let x = -2; x < COLS + 2; x++) {
+      const testPc = { ...piece, shape, x, y: piece.y };
+      if (collides(st.board, testPc, 0, 0, shape)) continue;
+
+      let ty = piece.y;
+      while (!collides(st.board, testPc, 0, ty - piece.y + 1, shape)) ty++;
+      testPc.y = ty;
+
+      const testBoard = cloneBoard(st.board);
+      let valid = true;
+      for (let r = 0; r < shape.length; r++)
+        for (let c = 0; c < shape[r].length; c++) {
+          if (!shape[r][c]) continue;
+          const by = testPc.y + r, bx = testPc.x + c;
+          if (by < 0 || by >= ROWS || bx < 0 || bx >= COLS) { valid = false; break; }
+          testBoard[by][bx] = '#fff';
+        }
+      if (!valid) continue;
+
+      // evaluate
+      let totalH = 0, holes = 0, bump = 0, compLines = 0;
+      const heights = new Array(COLS).fill(0);
+      for (let c2 = 0; c2 < COLS; c2++)
+        for (let r2 = 0; r2 < ROWS; r2++) {
+          if (testBoard[r2][c2]) { heights[c2] = ROWS - r2; break; }
+        }
+      for (let c2 = 0; c2 < COLS; c2++) {
+        totalH += heights[c2];
+        let bf = false;
+        for (let r2 = 0; r2 < ROWS; r2++) {
+          if (testBoard[r2][c2]) bf = true;
+          else if (bf) holes++;
+        }
+      }
+      for (let c2 = 0; c2 < COLS - 1; c2++) bump += Math.abs(heights[c2] - heights[c2+1]);
+      for (let r2 = 0; r2 < ROWS; r2++) if (testBoard[r2].every(v => v !== 0)) compLines++;
+
+      const score = w.h * totalH + w.holes * holes + w.bump * bump + w.lines * compLines + (Math.random() * w.rand);
+      if (score > bestScore) { bestScore = score; bestX = x; bestRot = rot; }
+    }
+  }
+  return { x: bestX, rotations: bestRot };
+}
+
+function aiTick(delta) {
+  if (ai.dead || !ai.piece) return;
+
+  if (!aiTarget) aiTarget = findBestMove(ai);
+
+  const speed = aiLevel === 1 ? 250 : aiLevel === 2 ? 120 : 60;
+  aiMoveTimer += delta;
+
+  if (aiMoveTimer >= speed) {
+    aiMoveTimer = 0;
+    if (aiTarget.rotations > 0) {
+      tryRotate(ai);
+      aiTarget.rotations--;
+    } else if (ai.piece.x < aiTarget.x) {
+      if (!collides(ai.board, ai.piece, 1, 0)) ai.piece.x++;
+    } else if (ai.piece.x > aiTarget.x) {
+      if (!collides(ai.board, ai.piece, -1, 0)) ai.piece.x--;
+    } else {
+      const cleared = hardDrop(ai);
+      if (cleared >= 3) sendAttack(ai, player, cleared);
+      aiTarget = null;
+    }
+  }
+}
+
+function tryRotateState(st) {
+  const rotated = rotate(st.piece.shape);
+  for (const kick of [0, -1, 1, -2, 2]) {
+    if (!collides(st.board, st.piece, kick, 0, rotated)) {
+      st.piece.shape = rotated;
+      st.piece.x += kick;
+      return;
+    }
+  }
+}
+
+// Override tryRotate for AI
+function tryRotate(st) { tryRotateState(st); }
+
+// ========== Game Loop ==========
+function gameLoop(time = 0) {
+  if (!gameRunning) return;
+  const delta = time - lastTime;
+  lastTime = time;
+
+  // Player drop
+  if (!player.dead) {
+    player.dropTimer += delta;
+    if (player.dropTimer >= player.dropInterval) {
+      const cleared = dropPiece(player);
+      if (cleared >= 3) sendAttack(player, ai, cleared);
+      player.dropTimer = 0;
+    }
+  }
+
+  // AI
+  if (!ai.dead) {
+    ai.dropTimer += delta;
+    if (ai.dropTimer >= ai.dropInterval) {
+      dropPiece(ai);
+      ai.dropTimer = 0;
+    }
+    aiTick(delta);
+  }
+
+  drawState(player);
+  drawState(ai);
+
+  // Check end
+  if (player.dead || ai.dead) {
+    gameRunning = false;
+    const resultEl = document.getElementById('result-text');
+    if (player.dead && !ai.dead) {
+      resultEl.textContent = 'YOU LOSE';
+      resultEl.className = 'result-text lose';
+    } else if (ai.dead && !player.dead) {
+      resultEl.textContent = 'YOU WIN!';
+      resultEl.className = 'result-text win';
+    } else {
+      resultEl.textContent = 'DRAW';
+      resultEl.className = 'result-text';
+    }
+    setTimeout(() => document.getElementById('result-overlay').classList.remove('hidden'), 800);
+    return;
+  }
+
+  animId = requestAnimationFrame(gameLoop);
+}
+
+function showMenu() {
+  document.getElementById('result-overlay').classList.add('hidden');
+  document.getElementById('menu-overlay').classList.remove('hidden');
+  cancelAnimationFrame(animId);
+  gameRunning = false;
+}
+
+function startGame(level) {
+  aiLevel = level;
+  document.getElementById('menu-overlay').classList.add('hidden');
+  document.getElementById('result-overlay').classList.add('hidden');
+
+  player = createState('p-board','p-next','p-hold','p-score','p-lines');
+  ai = createState('a-board','a-next','a-hold','a-score','a-lines');
+
+  player.piece = createPiece(randomType());
+  player.nextPiece = createPiece(randomType());
+  ai.piece = createPiece(randomType());
+  ai.nextPiece = createPiece(randomType());
+
+  aiMoveTimer = 0;
+  aiTarget = null;
+  gameRunning = true;
+  lastTime = performance.now();
+  cancelAnimationFrame(animId);
+  animId = requestAnimationFrame(gameLoop);
+}
+
+// ========== Player Input ==========
+function handleAction(action) {
+  if (!gameRunning || player.dead) return;
+  switch (action) {
+    case 'left':  if (!collides(player.board, player.piece, -1, 0)) player.piece.x--; break;
+    case 'right': if (!collides(player.board, player.piece, 1, 0)) player.piece.x++; break;
+    case 'down':
+      const cd = dropPiece(player);
+      if (cd >= 3) sendAttack(player, ai, cd);
+      player.dropTimer = 0; player.score++; player.scoreEl.textContent = player.score;
+      break;
+    case 'rotate': tryRotate(player); break;
+    case 'drop':
+      const ch = hardDrop(player);
+      if (ch >= 3) sendAttack(player, ai, ch);
+      break;
+    case 'hold': holdPiece(player); break;
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (!gameRunning) return;
+  switch (e.key) {
+    case 'ArrowLeft':  handleAction('left'); e.preventDefault(); break;
+    case 'ArrowRight': handleAction('right'); e.preventDefault(); break;
+    case 'ArrowDown':  handleAction('down'); e.preventDefault(); break;
+    case 'ArrowUp':    handleAction('rotate'); e.preventDefault(); break;
+    case ' ':          handleAction('drop'); e.preventDefault(); break;
+    case 'z': case 'Z': handleAction('hold'); e.preventDefault(); break;
+  }
+});
+
+['btn-left','btn-right','btn-down','btn-rotate','btn-drop','btn-hold'].forEach(id => {
+  const map = { 'btn-left':'left','btn-right':'right','btn-down':'down','btn-rotate':'rotate','btn-drop':'drop','btn-hold':'hold' };
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', e => { e.preventDefault(); handleAction(map[id]); });
+  el.addEventListener('mousedown', e => { e.preventDefault(); handleAction(map[id]); });
+});
+</script>
+</body>
+</html>
