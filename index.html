@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Tetris VS AI</title>
+<title>Tetris Battle</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -21,7 +22,7 @@
   .game-container { display: flex; gap: 16px; align-items: flex-start; }
   .player-section { display: flex; flex-direction: column; align-items: center; gap: 6px; }
   .player-label { font-size: 14px; font-weight: bold; color: #4d9bf7; text-transform: uppercase; letter-spacing: 2px; }
-  .ai-label { color: #e94560; }
+  .opponent-label { color: #e94560; }
   .board-area { display: flex; gap: 8px; align-items: flex-start; }
   .side-panel { display: flex; flex-direction: column; gap: 8px; min-width: 90px; }
   .panel-box {
@@ -54,7 +55,6 @@
   .attack-right { color: #4d9bf7; }
   .vs-text { font-size: 28px; font-weight: bold; color: #fff; text-shadow: 0 0 20px rgba(77,155,247,0.5); }
 
-  /* Overlay */
   .overlay {
     position: fixed;
     top: 0; left: 0;
@@ -72,7 +72,7 @@
   .overlay.hidden { display: none; }
   .overlay h1 { font-size: 36px; letter-spacing: 4px; }
   .overlay h2 { font-size: 20px; color: #c8d6f0; }
-  .level-buttons { display: flex; gap: 12px; margin-top: 8px; }
+  .level-buttons { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; justify-content: center; }
   .level-btn {
     padding: 14px 28px;
     font-size: 15px;
@@ -91,6 +91,8 @@
   .level-btn.normal:hover { background: #ffa502; color: #0a0e27; }
   .level-btn.hard { border-color: #e94560; }
   .level-btn.hard:hover { background: #e94560; color: #fff; }
+  .level-btn.online { border-color: #48dbfb; }
+  .level-btn.online:hover { background: #48dbfb; color: #0a0e27; }
   .result-text { font-size: 32px; }
   .win { color: #2ed573; }
   .lose { color: #e94560; }
@@ -106,7 +108,46 @@
   }
   .restart-btn:hover { background: #2b6fd6; }
 
-  /* Mobile */
+  /* Online lobby */
+  .lobby-section { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .lobby-section h2 { font-size: 18px; color: #c8d6f0; }
+  .room-code {
+    font-size: 28px;
+    font-weight: bold;
+    color: #48dbfb;
+    letter-spacing: 6px;
+    background: #0f1b3d;
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: 2px solid #1e3a6e;
+    user-select: all;
+  }
+  .room-input {
+    font-size: 20px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 2px solid #1e3a6e;
+    background: #0f1b3d;
+    color: #48dbfb;
+    text-align: center;
+    letter-spacing: 4px;
+    font-weight: bold;
+    outline: none;
+    width: 240px;
+  }
+  .room-input::placeholder { color: #3a5a8a; letter-spacing: 2px; font-size: 14px; }
+  .status-text { font-size: 14px; color: #ffa502; }
+  .back-btn {
+    padding: 8px 20px;
+    font-size: 13px;
+    border: 1px solid #1e3a6e;
+    border-radius: 6px;
+    background: transparent;
+    color: #5b82c4;
+    cursor: pointer;
+  }
+  .back-btn:hover { background: #1e3a6e; color: #fff; }
+
   .mobile-controls {
     display: none;
     width: 100%;
@@ -142,26 +183,56 @@
 </style>
 </head>
 <body>
+
+<!-- Main Menu -->
 <div id="menu-overlay" class="overlay">
-  <h1>TETRIS VS AI</h1>
-  <h2>Select AI Level</h2>
+  <h1>TETRIS BATTLE</h1>
+  <h2>Select Mode</h2>
   <div class="level-buttons">
-    <button class="level-btn easy" onclick="startGame(1)">EASY</button>
-    <button class="level-btn normal" onclick="startGame(2)">NORMAL</button>
-    <button class="level-btn hard" onclick="startGame(3)">HARD</button>
+    <button class="level-btn easy" onclick="startGame(1)">AI EASY</button>
+    <button class="level-btn normal" onclick="startGame(2)">AI NORMAL</button>
+    <button class="level-btn hard" onclick="startGame(3)">AI HARD</button>
+  </div>
+  <div class="level-buttons" style="margin-top:4px;">
+    <button class="level-btn online" onclick="showOnlineLobby()">ONLINE VS</button>
   </div>
 </div>
 
+<!-- Online Lobby -->
+<div id="lobby-overlay" class="overlay hidden">
+  <h1>ONLINE VS</h1>
+  <div class="lobby-section">
+    <div class="level-buttons">
+      <button class="level-btn online" onclick="createRoom()">CREATE ROOM</button>
+      <button class="level-btn online" onclick="showJoinRoom()">JOIN ROOM</button>
+    </div>
+    <div id="lobby-create" style="display:none;text-align:center;">
+      <h2>Room Code</h2>
+      <div class="room-code" id="room-code">...</div>
+      <p class="status-text" id="create-status">Waiting for opponent...</p>
+    </div>
+    <div id="lobby-join" style="display:none;text-align:center;">
+      <h2>Enter Room Code</h2>
+      <input class="room-input" id="join-input" placeholder="CODE" maxlength="8">
+      <br><br>
+      <button class="level-btn online" onclick="joinRoom()">CONNECT</button>
+      <p class="status-text" id="join-status"></p>
+    </div>
+    <button class="back-btn" onclick="backToMenu()">BACK</button>
+  </div>
+</div>
+
+<!-- Result -->
 <div id="result-overlay" class="overlay hidden">
   <div id="result-text" class="result-text"></div>
   <button class="restart-btn" onclick="showMenu()">MENU</button>
 </div>
 
+<!-- Game -->
 <div style="display:flex;flex-direction:column;align-items:center;">
   <div class="game-container">
-    <!-- Player -->
     <div class="player-section">
-      <div class="player-label">YOU</div>
+      <div class="player-label" id="label-you">YOU</div>
       <div class="board-area">
         <div class="side-panel">
           <div class="panel-box"><h3>Hold(Z)</h3><canvas id="p-hold" width="80" height="80"></canvas></div>
@@ -175,16 +246,14 @@
       </div>
     </div>
 
-    <!-- Center -->
     <div class="center-panel">
       <div class="vs-text">VS</div>
       <div id="attack-left" class="attack-indicator attack-left"></div>
       <div id="attack-right" class="attack-indicator attack-right"></div>
     </div>
 
-    <!-- AI -->
     <div class="player-section">
-      <div class="player-label ai-label">AI</div>
+      <div class="player-label opponent-label" id="label-opp">OPPONENT</div>
       <div class="board-area">
         <div class="side-panel">
           <div class="panel-box"><h3>Hold</h3><canvas id="a-hold" width="80" height="80"></canvas></div>
@@ -235,6 +304,11 @@ const SHAPES = [
 ];
 const BOMB_TYPE = 8, BOMB_CHANCE = 0.10, BOMB_RADIUS = 3;
 
+// ========== Game Mode ==========
+let gameMode = 'ai'; // 'ai' or 'online'
+let peer = null, conn = null, isHost = false;
+let onlineReady = false;
+
 // ========== Game State ==========
 function createState(boardId, nextId, holdId, scoreId, linesId) {
   const cv = document.getElementById(boardId);
@@ -254,8 +328,8 @@ function createState(boardId, nextId, holdId, scoreId, linesId) {
   };
 }
 
-let player, ai, aiLevel, gameRunning, animId, lastTime;
-let aiMoveTimer, aiDropTimer, aiTarget;
+let player, opponent, aiLevel, gameRunning, animId, lastTime;
+let aiMoveTimer, aiTarget;
 
 function randomType() {
   if (Math.random() < BOMB_CHANCE) return BOMB_TYPE;
@@ -299,7 +373,6 @@ function lockPiece(st) {
   if (bombPos.length > 0) explode(st, bombPos);
   const cleared = clearLines(st);
 
-  // receive pending garbage
   if (st.pendingGarbage > 0) {
     addGarbage(st, st.pendingGarbage);
     st.pendingGarbage = 0;
@@ -377,8 +450,13 @@ function addGarbage(st, count) {
 
 function sendAttack(fromSt, toSt, cleared) {
   if (cleared >= 3) {
-    const garbage = cleared - 2; // 3줄=1, 4줄=2
-    toSt.pendingGarbage += garbage;
+    const garbage = cleared - 2;
+    if (gameMode === 'online' && fromSt === player) {
+      // send garbage to remote opponent
+      sendPeerData({ type: 'attack', garbage });
+    } else {
+      toSt.pendingGarbage += garbage;
+    }
     showAttackIndicator(fromSt === player ? 'right' : 'left', garbage);
   }
 }
@@ -542,7 +620,6 @@ function drawState(st) {
     st.explosionTimer--;
   }
 
-  // dead overlay
   if (st.dead) {
     cx.fillStyle = 'rgba(0,0,0,0.6)';
     cx.fillRect(0, 0, cv.width, cv.height);
@@ -551,39 +628,28 @@ function drawState(st) {
   }
 }
 
-// ========== AI ==========
-function evaluateBoard(board) {
-  let totalHeight = 0, holes = 0, bumpiness = 0, completedLines = 0;
-  const heights = new Array(COLS).fill(0);
-
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
-      if (board[r][c]) { heights[c] = ROWS - r; break; }
-    }
-  }
-
-  for (let c = 0; c < COLS; c++) {
-    totalHeight += heights[c];
-    let blockFound = false;
-    for (let r = 0; r < ROWS; r++) {
-      if (board[r][c]) blockFound = true;
-      else if (blockFound) holes++;
-    }
-  }
-
-  for (let c = 0; c < COLS - 1; c++) bumpiness += Math.abs(heights[c] - heights[c + 1]);
-  for (let r = 0; r < ROWS; r++) if (board[r].every(v => v !== 0)) completedLines++;
-
-  return completedLines;
+// Draw opponent board from received data (online mode)
+function drawOpponentFromData(data) {
+  if (!opponent) return;
+  opponent.board = data.board;
+  opponent.score = data.score;
+  opponent.lines = data.lines;
+  opponent.dead = data.dead;
+  opponent.holdPiece = data.holdPiece;
+  opponent.piece = data.piece;
+  opponent.nextPiece = data.nextPiece;
+  opponent.scoreEl.textContent = data.score;
+  opponent.linesEl.textContent = data.lines;
+  opponent.explosionCells = data.explosionCells || [];
+  opponent.explosionTimer = data.explosionTimer || 0;
 }
 
+// ========== AI ==========
 function cloneBoard(board) { return board.map(r => [...r]); }
 
 function findBestMove(st) {
   const piece = st.piece;
   let bestScore = -Infinity, bestX = piece.x, bestRot = 0;
-
-  // weights by difficulty
   const w = aiLevel === 1 ? { h: -0.2, holes: -0.5, bump: -0.1, lines: 1.0, rand: 3.0 }
           : aiLevel === 2 ? { h: -0.5, holes: -2.0, bump: -0.3, lines: 3.0, rand: 0.8 }
           :                  { h: -0.51, holes: -3.5, bump: -0.18, lines: 5.0, rand: 0.0 };
@@ -594,11 +660,9 @@ function findBestMove(st) {
     for (let x = -2; x < COLS + 2; x++) {
       const testPc = { ...piece, shape, x, y: piece.y };
       if (collides(st.board, testPc, 0, 0, shape)) continue;
-
       let ty = piece.y;
       while (!collides(st.board, testPc, 0, ty - piece.y + 1, shape)) ty++;
       testPc.y = ty;
-
       const testBoard = cloneBoard(st.board);
       let valid = true;
       for (let r = 0; r < shape.length; r++)
@@ -609,25 +673,17 @@ function findBestMove(st) {
           testBoard[by][bx] = '#fff';
         }
       if (!valid) continue;
-
-      // evaluate
       let totalH = 0, holes = 0, bump = 0, compLines = 0;
       const heights = new Array(COLS).fill(0);
       for (let c2 = 0; c2 < COLS; c2++)
-        for (let r2 = 0; r2 < ROWS; r2++) {
-          if (testBoard[r2][c2]) { heights[c2] = ROWS - r2; break; }
-        }
+        for (let r2 = 0; r2 < ROWS; r2++) { if (testBoard[r2][c2]) { heights[c2] = ROWS - r2; break; } }
       for (let c2 = 0; c2 < COLS; c2++) {
         totalH += heights[c2];
         let bf = false;
-        for (let r2 = 0; r2 < ROWS; r2++) {
-          if (testBoard[r2][c2]) bf = true;
-          else if (bf) holes++;
-        }
+        for (let r2 = 0; r2 < ROWS; r2++) { if (testBoard[r2][c2]) bf = true; else if (bf) holes++; }
       }
       for (let c2 = 0; c2 < COLS - 1; c2++) bump += Math.abs(heights[c2] - heights[c2+1]);
       for (let r2 = 0; r2 < ROWS; r2++) if (testBoard[r2].every(v => v !== 0)) compLines++;
-
       const score = w.h * totalH + w.holes * holes + w.bump * bump + w.lines * compLines + (Math.random() * w.rand);
       if (score > bestScore) { bestScore = score; bestX = x; bestRot = rot; }
     }
@@ -636,43 +692,180 @@ function findBestMove(st) {
 }
 
 function aiTick(delta) {
-  if (ai.dead || !ai.piece) return;
-
-  if (!aiTarget) aiTarget = findBestMove(ai);
-
+  if (opponent.dead || !opponent.piece) return;
+  if (!aiTarget) aiTarget = findBestMove(opponent);
   const speed = aiLevel === 1 ? 250 : aiLevel === 2 ? 120 : 60;
   aiMoveTimer += delta;
-
   if (aiMoveTimer >= speed) {
     aiMoveTimer = 0;
     if (aiTarget.rotations > 0) {
-      tryRotate(ai);
+      tryRotate(opponent);
       aiTarget.rotations--;
-    } else if (ai.piece.x < aiTarget.x) {
-      if (!collides(ai.board, ai.piece, 1, 0)) ai.piece.x++;
-    } else if (ai.piece.x > aiTarget.x) {
-      if (!collides(ai.board, ai.piece, -1, 0)) ai.piece.x--;
+    } else if (opponent.piece.x < aiTarget.x) {
+      if (!collides(opponent.board, opponent.piece, 1, 0)) opponent.piece.x++;
+    } else if (opponent.piece.x > aiTarget.x) {
+      if (!collides(opponent.board, opponent.piece, -1, 0)) opponent.piece.x--;
     } else {
-      const cleared = hardDrop(ai);
-      if (cleared >= 3) sendAttack(ai, player, cleared);
+      const cleared = hardDrop(opponent);
+      if (cleared >= 3) sendAttack(opponent, player, cleared);
       aiTarget = null;
     }
   }
 }
 
-function tryRotateState(st) {
-  const rotated = rotate(st.piece.shape);
-  for (const kick of [0, -1, 1, -2, 2]) {
-    if (!collides(st.board, st.piece, kick, 0, rotated)) {
-      st.piece.shape = rotated;
-      st.piece.x += kick;
-      return;
+// ========== P2P Online ==========
+let syncTimer = 0;
+const SYNC_INTERVAL = 50; // send state every 50ms
+
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function showOnlineLobby() {
+  document.getElementById('menu-overlay').classList.add('hidden');
+  document.getElementById('lobby-overlay').classList.remove('hidden');
+  document.getElementById('lobby-create').style.display = 'none';
+  document.getElementById('lobby-join').style.display = 'none';
+}
+
+function backToMenu() {
+  document.getElementById('lobby-overlay').classList.add('hidden');
+  document.getElementById('menu-overlay').classList.remove('hidden');
+  if (peer) { peer.destroy(); peer = null; }
+  conn = null;
+}
+
+function createRoom() {
+  const code = generateRoomCode();
+  document.getElementById('lobby-create').style.display = 'block';
+  document.getElementById('lobby-join').style.display = 'none';
+  document.getElementById('room-code').textContent = code;
+  document.getElementById('create-status').textContent = 'Connecting...';
+
+  if (peer) peer.destroy();
+  peer = new Peer('tetris-' + code, { debug: 0 });
+
+  peer.on('open', () => {
+    document.getElementById('create-status').textContent = 'Waiting for opponent... Share the code!';
+    isHost = true;
+  });
+
+  peer.on('connection', (c) => {
+    conn = c;
+    setupConnection();
+    document.getElementById('create-status').textContent = 'Opponent connected! Starting...';
+    setTimeout(() => startOnlineGame(), 1000);
+  });
+
+  peer.on('error', (err) => {
+    document.getElementById('create-status').textContent = 'Error: ' + err.type;
+  });
+}
+
+function showJoinRoom() {
+  document.getElementById('lobby-join').style.display = 'block';
+  document.getElementById('lobby-create').style.display = 'none';
+  document.getElementById('join-status').textContent = '';
+  document.getElementById('join-input').value = '';
+  document.getElementById('join-input').focus();
+}
+
+function joinRoom() {
+  const code = document.getElementById('join-input').value.trim().toUpperCase();
+  if (!code) return;
+  document.getElementById('join-status').textContent = 'Connecting...';
+
+  if (peer) peer.destroy();
+  peer = new Peer(null, { debug: 0 });
+
+  peer.on('open', () => {
+    isHost = false;
+    conn = peer.connect('tetris-' + code, { reliable: true });
+    conn.on('open', () => {
+      setupConnection();
+      document.getElementById('join-status').textContent = 'Connected! Starting...';
+      setTimeout(() => startOnlineGame(), 1000);
+    });
+    conn.on('error', () => {
+      document.getElementById('join-status').textContent = 'Connection failed. Check the code.';
+    });
+  });
+
+  peer.on('error', (err) => {
+    document.getElementById('join-status').textContent = 'Error: ' + err.type + '. Check the code.';
+  });
+}
+
+function setupConnection() {
+  conn.on('data', (data) => {
+    if (data.type === 'state') {
+      drawOpponentFromData(data);
+    } else if (data.type === 'attack') {
+      player.pendingGarbage += data.garbage;
+      showAttackIndicator('left', data.garbage);
+    } else if (data.type === 'dead') {
+      opponent.dead = true;
     }
+  });
+
+  conn.on('close', () => {
+    if (gameRunning) {
+      opponent.dead = true;
+    }
+  });
+}
+
+function sendPeerData(data) {
+  if (conn && conn.open) {
+    try { conn.send(data); } catch(e) {}
   }
 }
 
-// Override tryRotate for AI
-function tryRotate(st) { tryRotateState(st); }
+function getPlayerSyncData() {
+  return {
+    type: 'state',
+    board: player.board,
+    score: player.score,
+    lines: player.lines,
+    dead: player.dead,
+    holdPiece: player.holdPiece,
+    piece: player.piece ? {
+      type: player.piece.type, shape: player.piece.shape,
+      color: player.piece.color, isBomb: player.piece.isBomb,
+      x: player.piece.x, y: player.piece.y
+    } : null,
+    nextPiece: player.nextPiece ? {
+      type: player.nextPiece.type, isBomb: player.nextPiece.isBomb, color: player.nextPiece.color
+    } : null,
+    explosionCells: player.explosionCells,
+    explosionTimer: player.explosionTimer,
+  };
+}
+
+function startOnlineGame() {
+  gameMode = 'online';
+  document.getElementById('lobby-overlay').classList.add('hidden');
+  document.getElementById('result-overlay').classList.add('hidden');
+  document.getElementById('label-opp').textContent = 'OPPONENT';
+
+  player = createState('p-board','p-next','p-hold','p-score','p-lines');
+  opponent = createState('a-board','a-next','a-hold','a-score','a-lines');
+
+  player.piece = createPiece(randomType());
+  player.nextPiece = createPiece(randomType());
+  // opponent state comes from network
+  opponent.piece = null;
+  opponent.nextPiece = null;
+
+  syncTimer = 0;
+  gameRunning = true;
+  lastTime = performance.now();
+  cancelAnimationFrame(animId);
+  animId = requestAnimationFrame(gameLoop);
+}
 
 // ========== Game Loop ==========
 function gameLoop(time = 0) {
@@ -685,32 +878,49 @@ function gameLoop(time = 0) {
     player.dropTimer += delta;
     if (player.dropTimer >= player.dropInterval) {
       const cleared = dropPiece(player);
-      if (cleared >= 3) sendAttack(player, ai, cleared);
+      if (cleared >= 3) sendAttack(player, opponent, cleared);
       player.dropTimer = 0;
     }
   }
 
-  // AI
-  if (!ai.dead) {
-    ai.dropTimer += delta;
-    if (ai.dropTimer >= ai.dropInterval) {
-      dropPiece(ai);
-      ai.dropTimer = 0;
+  if (gameMode === 'ai') {
+    // AI logic
+    if (!opponent.dead) {
+      opponent.dropTimer += delta;
+      if (opponent.dropTimer >= opponent.dropInterval) {
+        dropPiece(opponent);
+        opponent.dropTimer = 0;
+      }
+      aiTick(delta);
     }
-    aiTick(delta);
+  } else {
+    // Online: send state periodically
+    syncTimer += delta;
+    if (syncTimer >= SYNC_INTERVAL) {
+      sendPeerData(getPlayerSyncData());
+      syncTimer = 0;
+    }
+    if (player.dead) {
+      sendPeerData({ type: 'dead' });
+    }
   }
 
   drawState(player);
-  drawState(ai);
+  drawState(opponent);
 
   // Check end
-  if (player.dead || ai.dead) {
+  if (player.dead || opponent.dead) {
     gameRunning = false;
+    // send final state
+    if (gameMode === 'online') {
+      sendPeerData(getPlayerSyncData());
+      if (player.dead) sendPeerData({ type: 'dead' });
+    }
     const resultEl = document.getElementById('result-text');
-    if (player.dead && !ai.dead) {
+    if (player.dead && !opponent.dead) {
       resultEl.textContent = 'YOU LOSE';
       resultEl.className = 'result-text lose';
-    } else if (ai.dead && !player.dead) {
+    } else if (opponent.dead && !player.dead) {
       resultEl.textContent = 'YOU WIN!';
       resultEl.className = 'result-text win';
     } else {
@@ -729,20 +939,24 @@ function showMenu() {
   document.getElementById('menu-overlay').classList.remove('hidden');
   cancelAnimationFrame(animId);
   gameRunning = false;
+  if (peer) { peer.destroy(); peer = null; }
+  conn = null;
 }
 
 function startGame(level) {
+  gameMode = 'ai';
   aiLevel = level;
   document.getElementById('menu-overlay').classList.add('hidden');
   document.getElementById('result-overlay').classList.add('hidden');
+  document.getElementById('label-opp').textContent = 'AI';
 
   player = createState('p-board','p-next','p-hold','p-score','p-lines');
-  ai = createState('a-board','a-next','a-hold','a-score','a-lines');
+  opponent = createState('a-board','a-next','a-hold','a-score','a-lines');
 
   player.piece = createPiece(randomType());
   player.nextPiece = createPiece(randomType());
-  ai.piece = createPiece(randomType());
-  ai.nextPiece = createPiece(randomType());
+  opponent.piece = createPiece(randomType());
+  opponent.nextPiece = createPiece(randomType());
 
   aiMoveTimer = 0;
   aiTarget = null;
@@ -760,13 +974,13 @@ function handleAction(action) {
     case 'right': if (!collides(player.board, player.piece, 1, 0)) player.piece.x++; break;
     case 'down':
       const cd = dropPiece(player);
-      if (cd >= 3) sendAttack(player, ai, cd);
+      if (cd >= 3) sendAttack(player, opponent, cd);
       player.dropTimer = 0; player.score++; player.scoreEl.textContent = player.score;
       break;
     case 'rotate': tryRotate(player); break;
     case 'drop':
       const ch = hardDrop(player);
-      if (ch >= 3) sendAttack(player, ai, ch);
+      if (ch >= 3) sendAttack(player, opponent, ch);
       break;
     case 'hold': holdPiece(player); break;
   }
